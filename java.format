@@ -1,0 +1,160 @@
+import os, fnmatch, datetime
+
+
+def visitDirByListDir(result, filepath, eachpattern):
+	files = os.listdir(filepath)
+	for f in files:
+		fi_d = os.path.join(filepath,f)            
+		if os.path.isdir(fi_d):
+			visitDirByListDir(result, fi_d, eachpattern)
+		elif os.path.splitext(fi_d)[1] ==eachpattern:
+			result.append(os.path.join(filepath, fi_d))
+	return result
+
+
+def filter_files(result, dirname, patterns='*', single_level=False, yield_folders=False): 
+	patterns = patterns.split(';') 
+	allfiles = [] 
+	for rootdir, subdirname, files in os.walk(dirname): 
+		for f in files:
+			allfiles.append(os.path.join(rootdir, f))
+		if yield_folders: 
+			allfiles.extend(subdirname) 
+		if single_level: 
+			break
+	allfiles.sort()
+	for eachpattern in patterns: 
+		for eachfile in fnmatch.filter(allfiles, eachpattern): 
+			result.append(eachfile)           
+			#print os.path.normpath(eachfile)
+
+
+def readFile(fileName):
+	textLine = []
+	fopen = open(fileName, 'r')
+	for eachLine in fopen:
+		textLine.append(eachLine)
+	fopen.close
+	return textLine
+
+def addFileHead(result):
+	result.append('/**\n')
+	result.append(' * \n')
+	result.append(' * Copyright (c) 2015-2017 iPayLinks.All Rights Reserved.\n')
+	result.append(' */\n')
+
+
+def addFileMark(className, dicMark, result):
+	
+	todo = className
+	if '/' in className :
+		todo = className.split('\\')[-1]
+	if '.java' in todo :
+		todo = todo.split('.')[0]
+		 
+	result.append('/**\n')
+	result.append(' * ' + dicMark['@function'] + '\n')
+	result.append(' * @author ' + dicMark['@auth'] + '\n')
+	result.append(' * @date ' + dicMark['@date'] + '\n')
+	result.append(' */\n')
+
+def convertClassMark(className, dicMarkDefault, textLineResult, classMark) :
+	curText = ''
+	dicMark={}
+	for textLine in classMark:
+		#print '====================>' +curText
+		curText = textLine.replace('/', '').strip()
+		if len(curText.replace('*', '')) == 0:
+			continue;
+ 
+		if curText.startswith('*') and '@auth' in curText.strip() :
+			#print '____auth:'+ curText
+			dicMark['@auth']= curText[:curText.rindex('@auth')]
+		elif curText.startswith('*') and '@date' in curText.strip() :
+			#print '____datae:'+ curText
+			dicMark['@date'] = curText[:curText.rindex('@date')]
+		elif curText.startswith('*') and '@' not in curText.strip() and len(curText.replace('*', '').strip()) :
+			#print '____function	:'+ curText.replace('*', '').strip()
+			dicMark['@function'] = curText.replace('*', '').strip()
+
+	#if not dicMark.has_key('@auth') :
+	dicMark['@auth'] = dicMarkDefault['@auth']
+	if not dicMark.has_key('@date') :
+		dicMark['@date'] = dicMarkDefault['@date']
+	if not dicMark.has_key('@function') :
+		dicMark['@function'] = dicMarkDefault['@function']
+	
+	addFileMark(className, dicMark, textLineResult);
+
+	
+		
+def convertOneFile(dicMarkDefault, textLineResult, fileName, textLines):
+	isInit = True
+	isPackage = False
+	isClass = False
+	classMark = []
+	for textLine in textLines:
+		if isInit and not textLine.strip().startswith('package') :
+			continue
+		elif isInit :
+			isInit = False
+			isPackage = True
+			addFileHead(textLineResult)
+			textLineResult.append(textLine)
+		elif isPackage and not  textLine.strip() :
+			# 添加import
+			textLineResult.append(textLine)
+		elif isPackage and textLine.strip().startswith('import')  :
+			# 添加import
+			textLineResult.append(textLine)
+		elif isPackage and '*' in textLine.strip() :
+			classMark.append(textLine)
+		elif isPackage and textLine.strip().startswith('public') :
+			isPackage = False
+			isClass = True
+			convertClassMark(fileName, dicMarkDefault, textLineResult, classMark)
+			textLineResult.append(textLine)
+		elif isClass:
+			textLineResult.append(textLine)
+		
+
+def writeMyNewFile(filename, resultListToWrite):
+	fopen = open(filename, 'w')
+	for aLine in resultListToWrite:
+		fopen.write('%s' % (aLine))
+
+	fopen.flush()
+	fopen.close()
+
+    
+if __name__ == '__main__':
+
+	#try:
+
+		result=[]
+		filter_files(result, 'C:/ipayLinks/ipayLinks_repo/ump-mes', patterns='*.java', single_level=False, yield_folders=False)
+
+		textLine = []
+		textLineResult = []
+
+		now_time = datetime.datetime.now()
+		dicMarkDefault = {'@auth': 'liuzhangxue', '@function': 'module', '@date': '2017年11月28日 下午6:21:24'}
+			
+
+		for fileName in result:
+			textLineResult = []
+			print fileName
+			textLines = readFile(fileName);
+			convertOneFile(dicMarkDefault, textLineResult, fileName, textLines)
+
+			os.remove(fileName)
+			writeMyNewFile(fileName, textLineResult)
+
+
+	#except (NameError, TypeError):
+	#	print NameError
+
+	#li = [lambda :x for x in range(10)]
+	#print type(li)
+	#print type(li[0])
+	
